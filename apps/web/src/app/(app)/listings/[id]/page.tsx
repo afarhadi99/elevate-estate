@@ -588,23 +588,48 @@ export default function ListingDetailPage() {
                   variant="secondary"
                   className="bg-muted text-muted-foreground border-0"
                 >
-                  Draft
+                  Preview
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-lg border border-border/60 bg-muted/30 p-4 text-center space-y-2">
-                <Globe className="h-8 w-8 text-muted-foreground/40 mx-auto" />
-                <p className="text-sm text-muted-foreground">Public page not yet published</p>
-                <Button size="sm" variant="outline" className="gap-1.5">
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Preview
+              <div className="rounded-lg border border-border/60 bg-muted/30 p-3 flex items-center gap-2">
+                <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
+                <code className="flex-1 text-xs text-muted-foreground truncate">
+                  /properties/{listing.id}
+                </code>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs shrink-0"
+                  onClick={() => {
+                    navigator.clipboard.writeText(
+                      `${window.location.origin}/properties/${listing.id}`,
+                    )
+                    toast.success('Link copied')
+                  }}
+                >
+                  Copy
                 </Button>
               </div>
-              <Button size="sm" className="w-full gap-1.5">
-                <Globe className="h-3.5 w-3.5" />
-                Publish page
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 gap-1.5"
+                  onClick={() => window.open(`/properties/${listing.id}`, '_blank')}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Open preview
+                </Button>
+                <Button size="sm" className="flex-1 gap-1.5">
+                  <Globe className="h-3.5 w-3.5" />
+                  Publish page
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                The preview page uses your current session. Public access requires publishing.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
