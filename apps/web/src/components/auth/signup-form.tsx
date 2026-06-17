@@ -9,40 +9,78 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
 
-type Errors = { name?: string; email?: string; password?: string; confirmPassword?: string }
+type Errors = {
+  full_name?: string
+  email?: string
+  password?: string
+  confirmPassword?: string
+  org_name?: string
+  org_slug?: string
+}
 
 export function SignupForm() {
   const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' })
+  const [form, setForm] = useState({
+    full_name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    org_name: '',
+    org_slug: '',
+  })
   const [errors, setErrors] = useState<Errors>({})
 
   function set(key: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
-      setForm((p) => ({ ...p, [key]: e.target.value }))
+      const value = e.target.value
+      setForm((p) => {
+        const next = { ...p, [key]: value }
+        if (key === 'org_name') {
+          next.org_slug = value
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '')
+            .slice(0, 100)
+        }
+        return next
+      })
       setErrors((p) => ({ ...p, [key]: undefined }))
     }
   }
 
   function validate(): Errors {
     const e: Errors = {}
-    if (form.name.length < 2) e.name = 'Name must be at least 2 characters'
+    if (form.full_name.length < 2) e.full_name = 'Name must be at least 2 characters'
     if (!form.email.includes('@')) e.email = 'Enter a valid email'
     if (form.password.length < 8) e.password = 'Password must be at least 8 characters'
     else if (!/[A-Z]/.test(form.password)) e.password = 'Must contain an uppercase letter'
     else if (!/[0-9]/.test(form.password)) e.password = 'Must contain a number'
     if (form.password !== form.confirmPassword) e.confirmPassword = 'Passwords do not match'
+    if (form.org_name.length < 2) e.org_name = 'Organization name is required'
+    if (form.org_slug.length < 2) e.org_slug = 'URL slug must be at least 2 characters'
+    else if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(form.org_slug))
+      e.org_slug = 'Only lowercase letters, numbers, and hyphens'
     return e
   }
 
   async function onSubmit(evt: React.FormEvent) {
     evt.preventDefault()
     const e = validate()
-    if (Object.keys(e).length) { setErrors(e); return }
+    if (Object.keys(e).length) {
+      setErrors(e)
+      return
+    }
     setIsSubmitting(true)
     try {
-      await api.post('/auth/signup', { name: form.name, email: form.email, password: form.password })
+      await api.post('/auth/signup', {
+        full_name: form.full_name,
+        email: form.email,
+        password: form.password,
+        org_name: form.org_name,
+        org_slug: form.org_slug,
+      })
       router.push('/verify-email')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Could not create account'
@@ -55,14 +93,28 @@ export function SignupForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="name">Full name</Label>
-        <Input id="name" type="text" placeholder="Alex Johnson" autoComplete="name" value={form.name} onChange={set('name')} />
-        {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+        <Label htmlFor="full_name">Full name</Label>
+        <Input
+          id="full_name"
+          type="text"
+          placeholder="Alex Johnson"
+          autoComplete="name"
+          value={form.full_name}
+          onChange={set('full_name')}
+        />
+        {errors.full_name && <p className="text-xs text-destructive">{errors.full_name}</p>}
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="email">Work email</Label>
-        <Input id="email" type="email" placeholder="alex@brokerage.com" autoComplete="email" value={form.email} onChange={set('email')} />
+        <Input
+          id="email"
+          type="email"
+          placeholder="alex@brokerage.com"
+          autoComplete="email"
+          value={form.email}
+          onChange={set('email')}
+        />
         {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
       </div>
 
@@ -99,7 +151,45 @@ export function SignupForm() {
           value={form.confirmPassword}
           onChange={set('confirmPassword')}
         />
-        {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword}</p>}
+        {errors.confirmPassword && (
+          <p className="text-xs text-destructive">{errors.confirmPassword}</p>
+        )}
+      </div>
+
+      <div className="border-t border-border/60 pt-4 space-y-3">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          Organization
+        </p>
+
+        <div className="space-y-2">
+          <Label htmlFor="org_name">Brokerage name</Label>
+          <Input
+            id="org_name"
+            type="text"
+            placeholder="Elevate Realty Group"
+            value={form.org_name}
+            onChange={set('org_name')}
+          />
+          {errors.org_name && <p className="text-xs text-destructive">{errors.org_name}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="org_slug">URL slug</Label>
+          <div className="flex items-center gap-0">
+            <span className="flex h-9 items-center rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground select-none">
+              elevate.estate/
+            </span>
+            <Input
+              id="org_slug"
+              type="text"
+              placeholder="elevate-realty"
+              value={form.org_slug}
+              onChange={set('org_slug')}
+              className="rounded-l-none"
+            />
+          </div>
+          {errors.org_slug && <p className="text-xs text-destructive">{errors.org_slug}</p>}
+        </div>
       </div>
 
       <Button type="submit" className="w-full" disabled={isSubmitting}>
@@ -115,8 +205,13 @@ export function SignupForm() {
 
       <p className="text-xs text-center text-muted-foreground">
         By signing up you agree to our{' '}
-        <a href="/terms" className="underline hover:text-foreground">Terms</a>{' '}
-        and <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>
+        <a href="/terms" className="underline hover:text-foreground">
+          Terms
+        </a>{' '}
+        and{' '}
+        <a href="/privacy" className="underline hover:text-foreground">
+          Privacy Policy
+        </a>
       </p>
     </form>
   )
