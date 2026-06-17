@@ -1,6 +1,11 @@
-import type { Metadata } from 'next'
-import { UserPlus, Mail, MoreHorizontal } from 'lucide-react'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { UserPlus, Mail, MoreHorizontal, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -10,40 +15,109 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-
-export const metadata: Metadata = { title: 'Team' }
-
-const members = [
-  { id: '1', name: 'Alish Farhadi', email: 'afarhadi@mytsi.org', role: 'Owner', initials: 'AF', status: 'active', joinedAt: '2024-01-15' },
-  { id: '2', name: 'Sarah Chen', email: 'sarah@brokerage.com', role: 'Senior Agent', initials: 'SC', status: 'active', joinedAt: '2024-02-01' },
-  { id: '3', name: 'Marcus Lee', email: 'marcus@brokerage.com', role: 'Agent', initials: 'ML', status: 'active', joinedAt: '2024-03-10' },
-  { id: '4', name: 'Diana Walsh', email: 'diana@brokerage.com', role: 'Photographer', initials: 'DW', status: 'active', joinedAt: '2024-04-05' },
-  { id: '5', name: 'James Park', email: 'james@brokerage.com', role: 'Agent', initials: 'JP', status: 'invited', joinedAt: null },
-  { id: '6', name: 'Lisa Nguyen', email: 'lisa@brokerage.com', role: 'Viewer', initials: 'LN', status: 'invited', joinedAt: null },
-]
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { api } from '@/lib/api'
+import type { MemberResponse, InvitationResponse } from '@/lib/types'
 
 const roleColors: Record<string, string> = {
-  Owner: 'bg-primary/15 text-primary',
-  Admin: 'bg-violet-500/15 text-violet-700 dark:text-violet-300',
-  'Senior Agent': 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
-  Agent: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-  Photographer: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-  Viewer: 'bg-muted text-muted-foreground',
+  owner: 'bg-primary/15 text-primary',
+  admin: 'bg-violet-500/15 text-violet-700 dark:text-violet-300',
+  agent: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+  viewer: 'bg-muted text-muted-foreground',
+}
+
+function initials(name: string): string {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
 }
 
 export default function TeamPage() {
-  const activeMembers = members.filter((m) => m.status === 'active')
-  const pendingMembers = members.filter((m) => m.status === 'invited')
+  const [members, setMembers] = useState<MemberResponse[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [showInvite, setShowInvite] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('agent')
+  const [isInviting, setIsInviting] = useState(false)
+  const [removingId, setRemovingId] = useState<string | null>(null)
+
+  async function fetchMembers() {
+    try {
+      const data = await api.get<MemberResponse[]>('/organizations/current/members')
+      setMembers(data)
+    } catch {
+      toast.error('Could not load team members')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchMembers()
+  }, [])
+
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault()
+    if (!inviteEmail.includes('@')) {
+      toast.error('Enter a valid email address')
+      return
+    }
+    setIsInviting(true)
+    try {
+      await api.post<InvitationResponse>('/organizations/current/invitations', {
+        email: inviteEmail,
+        role: inviteRole,
+      })
+      toast.success(`Invitation sent to ${inviteEmail}`)
+      setShowInvite(false)
+      setInviteEmail('')
+      setInviteRole('agent')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Could not send invitation')
+    } finally {
+      setIsInviting(false)
+    }
+  }
+
+  async function handleRemove(userId: string, name: string) {
+    if (!confirm(`Remove ${name} from the team?`)) return
+    setRemovingId(userId)
+    try {
+      await api.delete(`/organizations/current/members/${userId}`)
+      setMembers((prev) => prev.filter((m) => m.user_id !== userId))
+      toast.success(`${name} removed`)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Could not remove member')
+    } finally {
+      setRemovingId(null)
+    }
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
-            {activeMembers.length} active · {pendingMembers.length} pending invite
+            {isLoading ? '…' : `${members.length} member${members.length !== 1 ? 's' : ''}`}
           </p>
         </div>
-        <Button size="sm" className="gap-1.5">
+        <Button size="sm" className="gap-1.5" onClick={() => setShowInvite(true)}>
           <UserPlus className="h-4 w-4" />
           Invite member
         </Button>
@@ -51,77 +125,136 @@ export default function TeamPage() {
 
       <Card className="border-border/60 shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold">Active members</CardTitle>
+          <CardTitle className="text-sm font-semibold">Members</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="divide-y divide-border/50">
-            {activeMembers.map((member) => (
-              <div key={member.id} className="flex items-center gap-4 px-6 py-4">
-                <Avatar className="h-9 w-9">
-                  <AvatarFallback className="text-sm font-semibold bg-primary/10 text-primary">
-                    {member.initials}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{member.name}</p>
-                  <p className="text-xs text-muted-foreground">{member.email}</p>
-                </div>
-                <Badge
-                  variant="secondary"
-                  className={`text-xs border-0 ${roleColors[member.role] ?? 'bg-muted text-muted-foreground'}`}
-                >
-                  {member.role}
-                </Badge>
-                <DropdownMenu>
-                  <DropdownMenuTrigger>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem>Change role</DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive focus:text-destructive">
-                      Remove from team
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {pendingMembers.length > 0 && (
-        <Card className="border-border/60 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">Pending invitations</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
+          {isLoading ? (
             <div className="divide-y divide-border/50">
-              {pendingMembers.map((member) => (
-                <div key={member.id} className="flex items-center gap-4 px-6 py-4">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-6 py-4 animate-pulse">
+                  <div className="h-9 w-9 rounded-full bg-muted" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 w-32 rounded bg-muted" />
+                    <div className="h-3 w-48 rounded bg-muted" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{member.email}</p>
-                    <p className="text-xs text-muted-foreground">Invitation sent · Pending acceptance</p>
-                  </div>
-                  <Badge variant="secondary" className="text-xs border-0 bg-muted text-muted-foreground">
-                    {member.role}
-                  </Badge>
-                  <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground">
-                    Resend
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : members.length === 0 ? (
+            <p className="text-center text-sm text-muted-foreground py-12">
+              No members yet. Invite your team!
+            </p>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {members.map((member) => (
+                <div key={member.user_id} className="flex items-center gap-4 px-6 py-4">
+                  <Avatar className="h-9 w-9">
+                    <AvatarFallback className="text-sm font-semibold bg-primary/10 text-primary">
+                      {initials(member.full_name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{member.full_name}</p>
+                    <p className="text-xs text-muted-foreground">{member.email}</p>
+                  </div>
+                  <Badge
+                    variant="secondary"
+                    className={`text-xs border-0 ${roleColors[member.role] ?? 'bg-muted text-muted-foreground'}`}
+                  >
+                    {member.role}
+                  </Badge>
+                  {member.role !== 'owner' && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          disabled={removingId === member.user_id}
+                        >
+                          {removingId === member.user_id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <MoreHorizontal className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => handleRemove(member.user_id, member.full_name)}
+                        >
+                          Remove from team
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Invite dialog */}
+      <Dialog open={showInvite} onOpenChange={setShowInvite}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invite a team member</DialogTitle>
+            <DialogDescription>
+              They&apos;ll receive an email with a link to join your organization.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleInvite} className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label htmlFor="invite-email">Email address</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="colleague@brokerage.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={inviteRole} onValueChange={(v: string | null) => setInviteRole(v ?? 'agent')}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="agent">Agent</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowInvite(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isInviting}>
+                {isInviting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending…
+                  </>
+                ) : (
+                  <>
+                    <Mail className="mr-2 h-4 w-4" />
+                    Send invitation
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
