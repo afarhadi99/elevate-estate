@@ -11,12 +11,12 @@ import {
   Pencil,
   Globe,
   MoreHorizontal,
-  Clock,
   FileText,
   CheckCircle2,
   Loader2,
   ArrowRight,
 } from 'lucide-react'
+import { generateDescription } from '@/app/actions/generate-description'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -65,6 +65,9 @@ export default function ListingDetailPage() {
   const [isAddingNote, setIsAddingNote] = useState(false)
   const [isUpdatingStage, setIsUpdatingStage] = useState(false)
   const [notFound404, setNotFound404] = useState(false)
+  const [aiTone, setAiTone] = useState('Luxury')
+  const [generatedDesc, setGeneratedDesc] = useState('')
+  const [isGenerating, setIsGenerating] = useState(false)
 
   const fetchListing = useCallback(async () => {
     try {
@@ -528,7 +531,7 @@ export default function ListingDetailPage() {
 
         {/* AI Tools Tab */}
         <TabsContent value="ai" className="mt-0">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-4">
             <Card className="border-border/60 shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -536,25 +539,104 @@ export default function ListingDetailPage() {
                   Description Generator
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4">
                 <p className="text-xs text-muted-foreground">
-                  Generate a structured marketing description from listing facts. Output is
-                  reviewable before publishing.
+                  Generate a marketing description from this listing&apos;s facts using Claude AI.
+                  Review the output before publishing.
                 </p>
-                <div className="space-y-2">
-                  <label className="text-xs font-medium">Tone</label>
-                  <select className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs">
-                    <option>Luxury</option>
-                    <option>Family-friendly</option>
-                    <option>Investor</option>
-                    <option>Modern</option>
-                    <option>Neutral</option>
-                  </select>
+                <div className="flex items-center gap-3">
+                  <div className="space-y-1.5 flex-1">
+                    <label className="text-xs font-medium">Tone</label>
+                    <select
+                      className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs"
+                      value={aiTone}
+                      onChange={(e) => setAiTone(e.target.value)}
+                    >
+                      <option>Luxury</option>
+                      <option>Family-friendly</option>
+                      <option>Investor</option>
+                      <option>Modern</option>
+                      <option>Neutral</option>
+                    </select>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="h-8 gap-1.5 mt-5 shrink-0"
+                    disabled={isGenerating}
+                    onClick={async () => {
+                      setIsGenerating(true)
+                      setGeneratedDesc('')
+                      try {
+                        const desc = await generateDescription({
+                          address: listing.address?.street_1 ?? listing.title,
+                          city: listing.address?.city,
+                          state: listing.address?.state,
+                          price: listing.asking_price ?? undefined,
+                          bedrooms: listing.bedrooms,
+                          bathrooms: listing.bathrooms ?? undefined,
+                          squareFeet: listing.square_feet,
+                          yearBuilt: listing.year_built ?? undefined,
+                          propertyType: listing.property_type,
+                          tone: aiTone,
+                        })
+                        setGeneratedDesc(desc)
+                        toast.success('Description generated')
+                      } catch {
+                        toast.error('Could not generate description')
+                      } finally {
+                        setIsGenerating(false)
+                      }
+                    }}
+                  >
+                    {isGenerating ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
+                    {isGenerating ? 'Generating…' : 'Generate'}
+                  </Button>
                 </div>
-                <Button size="sm" className="w-full h-8 gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Generate description
-                </Button>
+
+                {generatedDesc && (
+                  <div className="space-y-3">
+                    <div className="rounded-md border border-border/60 bg-muted/30 p-3">
+                      <p className="text-sm leading-relaxed text-foreground/80">{generatedDesc}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 h-8 text-xs"
+                        onClick={() => {
+                          navigator.clipboard.writeText(generatedDesc)
+                          toast.success('Copied to clipboard')
+                        }}
+                      >
+                        Copy
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1 h-8 text-xs gap-1"
+                        onClick={async () => {
+                          try {
+                            await api.patch(`/listings/${listing.id}`, {
+                              description: generatedDesc,
+                            })
+                            setListing((prev) =>
+                              prev ? { ...prev, description: generatedDesc } : prev,
+                            )
+                            toast.success('Description saved to listing')
+                          } catch {
+                            toast.error('Could not save description')
+                          }
+                        }}
+                      >
+                        <FileText className="h-3 w-3" />
+                        Save to listing
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -567,11 +649,12 @@ export default function ListingDetailPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Enhance selected listing photos using AI. Originals are always preserved.
+                  Upload photos first, then select them for AI enhancement. Originals are always
+                  preserved.
                 </p>
-                <Button size="sm" className="w-full h-8 gap-1.5" variant="outline">
+                <Button size="sm" className="w-full h-8 gap-1.5" variant="outline" disabled>
                   <Camera className="h-3.5 w-3.5" />
-                  Select photos to enhance
+                  Upload photos to enable enhancement
                 </Button>
               </CardContent>
             </Card>
