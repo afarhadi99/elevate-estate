@@ -1,8 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Bell, Moon, Sun, Search } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { Bell, Moon, Sun, Search, Settings, LogOut } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -15,6 +14,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { useAuth } from '@/context/auth-context'
+import { initials } from '@/lib/utils'
 
 const pageTitles: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -34,8 +35,12 @@ function getTitle(pathname: string) {
 
 export function Header() {
   const pathname = usePathname()
+  const router = useRouter()
   const { theme, setTheme } = useTheme()
+  const { user, logout } = useAuth()
   const title = getTitle(pathname)
+
+  const userInitials = user?.full_name ? initials(user.full_name) : '?'
 
   return (
     <header className="flex h-16 items-center gap-4 border-b border-border/60 bg-background/95 backdrop-blur-sm px-6 sticky top-0 z-10">
@@ -71,7 +76,6 @@ export function Header() {
           className="h-8 w-8 text-muted-foreground hover:text-foreground relative"
         >
           <Bell className="h-4 w-4" />
-          <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
           <span className="sr-only">Notifications</span>
         </Button>
 
@@ -79,22 +83,31 @@ export function Header() {
           <DropdownMenuTrigger>
             <Avatar className="h-7 w-7 cursor-pointer">
               <AvatarFallback className="text-xs bg-primary/15 text-primary font-semibold">
-                AF
+                {userInitials}
               </AvatarFallback>
             </Avatar>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">Alish Farhadi</p>
-                <p className="text-xs text-muted-foreground truncate">afarhadi@mytsi.org</p>
+                <p className="text-sm font-medium">{user?.full_name ?? 'Loading…'}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email ?? ''}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profile settings</DropdownMenuItem>
-            <DropdownMenuItem>Organization settings</DropdownMenuItem>
+            <DropdownMenuItem
+              className="flex items-center gap-2 cursor-pointer"
+              onClick={() => router.push('/settings')}
+            >
+              <Settings className="h-3.5 w-3.5" />
+              Organization settings
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive focus:text-destructive">
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive flex items-center gap-2 cursor-pointer"
+              onClick={logout}
+            >
+              <LogOut className="h-3.5 w-3.5" />
               Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
