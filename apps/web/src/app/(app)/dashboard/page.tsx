@@ -1,159 +1,142 @@
-import type { Metadata } from 'next'
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   Home,
   TrendingUp,
   Users,
-  Clock,
   ArrowRight,
-  Camera,
   FileText,
   MapPin,
+  Clock,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { formatCurrency, formatRelativeTime } from '@/lib/utils'
+import { formatCurrency, formatRelativeTime, initials } from '@/lib/utils'
+import { api } from '@/lib/api'
+import { useAuth } from '@/context/auth-context'
+import type { PaginatedListings, Listing } from '@/lib/types'
 
-export const metadata: Metadata = { title: 'Dashboard' }
+function StatsSkeletons() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Card key={i} className="border-border/60 shadow-sm">
+          <CardContent className="p-5">
+            <div className="space-y-2 animate-pulse">
+              <div className="h-3 w-24 rounded bg-muted" />
+              <div className="h-7 w-16 rounded bg-muted" />
+              <div className="h-3 w-32 rounded bg-muted" />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
 
-const stats = [
-  {
-    label: 'Active Listings',
-    value: '24',
-    change: '+3 this month',
-    trend: 'up',
-    icon: Home,
-    color: 'text-primary',
-    bg: 'bg-primary/10',
-  },
-  {
-    label: 'Total Portfolio Value',
-    value: '$18.4M',
-    change: '+12% YoY',
-    trend: 'up',
-    icon: TrendingUp,
-    color: 'text-emerald-600 dark:text-emerald-400',
-    bg: 'bg-emerald-500/10',
-  },
-  {
-    label: 'Team Members',
-    value: '8',
-    change: '2 invites pending',
-    trend: 'neutral',
-    icon: Users,
-    color: 'text-violet-600 dark:text-violet-400',
-    bg: 'bg-violet-500/10',
-  },
-  {
-    label: 'Avg. Days on Market',
-    value: '23',
-    change: '-4 from last month',
-    trend: 'down',
-    icon: Clock,
-    color: 'text-amber-600 dark:text-amber-400',
-    bg: 'bg-amber-500/10',
-  },
-]
+function stageColor(stage: string): string {
+  const map: Record<string, string> = {
+    Lead: 'bg-slate-500/15 text-slate-700 dark:text-slate-300',
+    Prep: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+    Photography: 'bg-violet-500/15 text-violet-700 dark:text-violet-300',
+    Active: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+    'Under Contract': 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
+    Closed: 'bg-muted text-muted-foreground',
+    Archived: 'bg-muted text-muted-foreground',
+  }
+  return map[stage] ?? 'bg-muted text-muted-foreground'
+}
 
-const recentListings = [
-  {
-    id: '1',
-    address: '142 Riverside Drive',
-    city: 'New York, NY 10024',
-    price: 2850000,
-    stage: 'Photography',
-    stageColor: 'bg-violet-500/15 text-violet-700 dark:text-violet-300',
-    beds: 4,
-    baths: 3,
-    sqft: 2400,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
-    agent: 'Sarah Chen',
-    agentInitials: 'SC',
-  },
-  {
-    id: '2',
-    address: '890 Park Avenue',
-    city: 'New York, NY 10075',
-    price: 4200000,
-    stage: 'Active',
-    stageColor: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-    beds: 5,
-    baths: 4,
-    sqft: 3200,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    agent: 'Marcus Lee',
-    agentInitials: 'ML',
-  },
-  {
-    id: '3',
-    address: '55 Water Street, Unit 12C',
-    city: 'New York, NY 10041',
-    price: 1150000,
-    stage: 'Prep',
-    stageColor: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-    beds: 2,
-    baths: 2,
-    sqft: 1100,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-    agent: 'Diana Walsh',
-    agentInitials: 'DW',
-  },
-  {
-    id: '4',
-    address: '22 Hudson Yards',
-    city: 'New York, NY 10001',
-    price: 6800000,
-    stage: 'Under Contract',
-    stageColor: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
-    beds: 6,
-    baths: 5,
-    sqft: 4800,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
-    agent: 'Sarah Chen',
-    agentInitials: 'SC',
-  },
-]
+function listingAddress(l: Listing): string {
+  if (l.address) {
+    return [l.address.street_1, l.address.street_2].filter(Boolean).join(', ')
+  }
+  return l.title
+}
 
-const activity = [
-  {
-    id: '1',
-    type: 'note',
-    icon: FileText,
-    text: 'Sarah added a note on 142 Riverside Drive',
-    time: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-  },
-  {
-    id: '2',
-    type: 'media',
-    icon: Camera,
-    text: 'Marcus uploaded 24 photos for 890 Park Avenue',
-    time: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-  },
-  {
-    id: '3',
-    type: 'listing',
-    icon: MapPin,
-    text: '22 Hudson Yards moved to Under Contract',
-    time: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-  },
-  {
-    id: '4',
-    type: 'listing',
-    icon: Home,
-    text: 'New listing created: 55 Water Street, Unit 12C',
-    time: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-  },
-]
+function listingCity(l: Listing): string {
+  if (l.address) {
+    return `${l.address.city}, ${l.address.state} ${l.address.postal_code}`
+  }
+  return ''
+}
 
 export default function DashboardPage() {
+  const { user } = useAuth()
+  const [listings, setListings] = useState<Listing[]>([])
+  const [total, setTotal] = useState(0)
+  const [memberCount, setMemberCount] = useState(0)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      api.get<PaginatedListings>('/listings?page_size=5').catch(() => null),
+      api.get<{ user_id: string }[]>('/organizations/current/members').catch(() => null),
+    ]).then(([listingsData, membersData]) => {
+      if (listingsData) {
+        setListings(listingsData.items)
+        setTotal(listingsData.total)
+      }
+      if (membersData) {
+        setMemberCount(membersData.length)
+      }
+      setIsLoading(false)
+    })
+  }, [])
+
+  const firstName = user?.full_name?.split(' ')[0] ?? 'there'
+  const activeCount = listings.filter(
+    (l) => !['Closed', 'Archived', 'off_market'].includes(l.stage),
+  ).length
+  const totalValue = listings.reduce(
+    (sum, l) => sum + (l.asking_price ? parseFloat(l.asking_price) : 0),
+    0,
+  )
+
+  const stats = [
+    {
+      label: 'Active Listings',
+      value: isLoading ? '—' : String(total),
+      change: isLoading ? '' : `${activeCount} not yet closed`,
+      icon: Home,
+      color: 'text-primary',
+      bg: 'bg-primary/10',
+    },
+    {
+      label: 'Portfolio Value',
+      value: isLoading ? '—' : formatCurrency(totalValue),
+      change: 'combined asking price',
+      icon: TrendingUp,
+      color: 'text-emerald-600 dark:text-emerald-400',
+      bg: 'bg-emerald-500/10',
+    },
+    {
+      label: 'Team Members',
+      value: isLoading ? '—' : String(memberCount),
+      change: 'in your organization',
+      icon: Users,
+      color: 'text-violet-600 dark:text-violet-400',
+      bg: 'bg-violet-500/10',
+    },
+    {
+      label: 'Recent Activity',
+      value: isLoading ? '—' : String(listings.length),
+      change: 'listings loaded',
+      icon: Clock,
+      color: 'text-amber-600 dark:text-amber-400',
+      bg: 'bg-amber-500/10',
+    },
+  ]
+
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Welcome */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Good morning, Alish</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">Good morning, {firstName}</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
             Here&apos;s what&apos;s happening with your portfolio today.
           </p>
@@ -168,29 +151,33 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon
-          return (
-            <Card key={stat.label} className="border-border/60 shadow-sm">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      {stat.label}
-                    </p>
-                    <p className="text-2xl font-bold tracking-tight">{stat.value}</p>
-                    <p className="text-xs text-muted-foreground">{stat.change}</p>
+      {isLoading ? (
+        <StatsSkeletons />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat) => {
+            const Icon = stat.icon
+            return (
+              <Card key={stat.label} className="border-border/60 shadow-sm">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        {stat.label}
+                      </p>
+                      <p className="text-2xl font-bold tracking-tight">{stat.value}</p>
+                      <p className="text-xs text-muted-foreground">{stat.change}</p>
+                    </div>
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${stat.bg}`}>
+                      <Icon className={`h-5 w-5 ${stat.color}`} />
+                    </div>
                   </div>
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${stat.bg}`}>
-                    <Icon className={`h-5 w-5 ${stat.color}`} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Recent Listings */}
@@ -208,79 +195,109 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="divide-y divide-border/50">
-                {recentListings.map((listing) => (
+              {isLoading ? (
+                <div className="divide-y divide-border/50">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-4 px-6 py-4 animate-pulse">
+                      <div className="h-14 w-20 rounded-md bg-muted flex-shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 w-48 rounded bg-muted" />
+                        <div className="h-3 w-32 rounded bg-muted" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : listings.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <MapPin className="h-8 w-8 text-muted-foreground/30 mb-3" />
+                  <p className="text-sm text-muted-foreground">No listings yet</p>
                   <Link
-                    key={listing.id}
-                    href={`/listings/${listing.id}`}
-                    className="flex items-center gap-4 px-6 py-4 hover:bg-muted/40 transition-colors group"
+                    href="/listings/new"
+                    className="mt-3 text-xs text-primary hover:underline underline-offset-4"
                   >
-                    {/* Thumbnail placeholder */}
-                    <div className="h-14 w-20 rounded-md bg-muted/60 flex-shrink-0 overflow-hidden">
-                      <div className="h-full w-full bg-gradient-to-br from-muted to-muted/40" />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
-                            {listing.address}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{listing.city}</p>
-                        </div>
-                        <p className="text-sm font-semibold shrink-0">
-                          {formatCurrency(listing.price)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3 mt-1.5">
-                        <Badge
-                          variant="secondary"
-                          className={`text-xs px-2 py-0.5 ${listing.stageColor} border-0`}
-                        >
-                          {listing.stage}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {listing.beds}bd · {listing.baths}ba · {listing.sqft.toLocaleString()} sqft
-                        </span>
-                        <span className="text-xs text-muted-foreground ml-auto">
-                          {formatRelativeTime(listing.updatedAt)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <Avatar className="h-6 w-6 shrink-0">
-                      <AvatarFallback className="text-xs bg-primary/15 text-primary font-medium">
-                        {listing.agentInitials}
-                      </AvatarFallback>
-                    </Avatar>
+                    Create your first listing
                   </Link>
-                ))}
-              </div>
+                </div>
+              ) : (
+                <div className="divide-y divide-border/50">
+                  {listings.map((listing) => (
+                    <Link
+                      key={listing.id}
+                      href={`/listings/${listing.id}`}
+                      className="flex items-center gap-4 px-6 py-4 hover:bg-muted/40 transition-colors group"
+                    >
+                      <div className="h-14 w-20 rounded-md bg-muted/60 flex-shrink-0 overflow-hidden">
+                        <div className="h-full w-full bg-gradient-to-br from-muted to-muted/40" />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
+                              {listingAddress(listing)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{listingCity(listing)}</p>
+                          </div>
+                          {listing.asking_price && (
+                            <p className="text-sm font-semibold shrink-0">
+                              {formatCurrency(parseFloat(listing.asking_price))}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1.5">
+                          <Badge
+                            variant="secondary"
+                            className={`text-xs px-2 py-0.5 border-0 ${stageColor(listing.stage)}`}
+                          >
+                            {listing.stage}
+                          </Badge>
+                          {listing.bedrooms && (
+                            <span className="text-xs text-muted-foreground">
+                              {listing.bedrooms}bd
+                              {listing.bathrooms && ` · ${listing.bathrooms}ba`}
+                              {listing.square_feet &&
+                                ` · ${listing.square_feet.toLocaleString()} sqft`}
+                            </span>
+                          )}
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {formatRelativeTime(listing.updated_at)}
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Activity Feed */}
+        {/* Activity / Quick links */}
         <div>
           <Card className="border-border/60 shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold">Activity</CardTitle>
+              <CardTitle className="text-base font-semibold">Quick Actions</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {activity.map((item) => {
+            <CardContent className="space-y-2">
+              {[
+                { href: '/listings/new', icon: Home, label: 'New listing' },
+                { href: '/listings', icon: MapPin, label: 'All listings' },
+                { href: '/team', icon: Users, label: 'Team' },
+                { href: '/integrations', icon: FileText, label: 'Integrations' },
+              ].map((item) => {
                 const Icon = item.icon
                 return (
-                  <div key={item.id} className="flex gap-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
-                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-muted/60 transition-colors group"
+                  >
+                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted group-hover:bg-primary/10 transition-colors">
+                      <Icon className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs leading-relaxed text-foreground/80">{item.text}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {formatRelativeTime(item.time)}
-                      </p>
-                    </div>
-                  </div>
+                    <span className="font-medium">{item.label}</span>
+                    <ArrowRight className="h-3.5 w-3.5 ml-auto text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
+                  </Link>
                 )
               })}
             </CardContent>

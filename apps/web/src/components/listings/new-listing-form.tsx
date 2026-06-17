@@ -16,6 +16,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
+import { api } from '@/lib/api'
+import type { Listing } from '@/lib/types'
 
 type FormState = {
   address: string
@@ -43,6 +45,11 @@ const PROPERTY_TYPES = [
   'Land',
   'Commercial',
 ]
+
+const PROPERTY_TYPE_MAP: Record<string, 'residential' | 'commercial' | 'land' | 'rental'> = {
+  Commercial: 'commercial',
+  Land: 'land',
+}
 
 function validate(data: FormState): FormErrors {
   const errors: FormErrors = {}
@@ -89,19 +96,31 @@ export function NewListingForm() {
     }
     setIsSubmitting(true)
     try {
-      const payload = {
-        ...form,
-        price: Number(form.price),
-        beds: form.beds ? Number(form.beds) : 0,
-        baths: form.baths ? Number(form.baths) : 0,
-        sqft: form.sqft ? Number(form.sqft) : undefined,
-      }
-      // In production: await api.post('/listings', payload)
-      await new Promise((r) => setTimeout(r, 800))
+      const title = [form.address, form.unit].filter(Boolean).join(' ')
+      const listing = await api.post<Listing>('/listings', {
+        title,
+        description: form.description || undefined,
+        property_type: PROPERTY_TYPE_MAP[form.type] ?? 'residential',
+        listing_type: 'for_sale',
+        stage: 'Lead',
+        asking_price: Number(form.price),
+        bedrooms: form.beds ? Number(form.beds) : undefined,
+        bathrooms: form.baths ? Number(form.baths) : undefined,
+        square_feet: form.sqft ? Number(form.sqft) : undefined,
+        address: {
+          street_1: form.address,
+          street_2: form.unit || undefined,
+          city: form.city,
+          state: form.state.toUpperCase(),
+          postal_code: form.zip,
+          country: 'US',
+        },
+      })
       toast.success('Listing created')
-      router.push('/listings/1')
-    } catch {
-      toast.error('Could not create listing')
+      router.push(`/listings/${listing.id}`)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Could not create listing'
+      toast.error(message)
     } finally {
       setIsSubmitting(false)
     }
