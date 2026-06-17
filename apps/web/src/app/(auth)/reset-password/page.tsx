@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ResetPasswordForm } from '@/components/auth/reset-password-form'
@@ -14,7 +15,9 @@ export default function ResetPasswordPage() {
         </p>
       </div>
 
-      <ResetPasswordForm />
+      <Suspense fallback={<div className="h-32 animate-pulse rounded-md bg-muted" />}>
+        <ResetPasswordForm />
+      </Suspense>
 
       <p className="text-sm text-center text-muted-foreground">
         <Link href="/login" className="font-medium text-foreground hover:underline underline-offset-4">
